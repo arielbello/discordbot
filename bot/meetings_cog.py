@@ -8,14 +8,30 @@ _COG_NAME = "Meetings"
 
 class ScheduleEntry:
 
-    def __init__(self, p_hour, p_minute, p_guild, p_channel, p_author):
-        self.time = f"{str(p_hour).rjust(2,'0')}:{str(p_minute).rjust(2,'0')}"
-        self.hour = p_hour
-        self.minute = p_minute
+    def __init__(self, hour, minute, guild_, channel_, author_):
+        self.time = _format_time(hour, minute)
+        self.hour = hour
+        self.minute = minute
         self.fired = 0
-        self.guild = p_guild
-        self.channel = p_channel
-        self.author = p_author
+        self.guild = guild_
+        self.channel = channel_
+        self.author = author_
+
+
+def _format_time(hour:int, minute:int) -> str:
+    return f"{str(hour).rjust(2, '0')}:{str(minute).rjust(2, '0')}"
+
+def _insert_schedule_entry(schedule, entry):
+
+    if len(schedule) >= Meetings.SCHEDULE_LIMIT:
+        return False
+    elif entry.time in [s.time for s in schedule]:
+        return False
+
+    schedule.append(entry)
+    schedule.sort(key=lambda x: (x.hour, x.minute))
+    return True
+
 
 class Meetings(commands.Cog, name=_COG_NAME):
 
@@ -29,14 +45,21 @@ class Meetings(commands.Cog, name=_COG_NAME):
 
     @tasks.loop(seconds=10.0)
     async def _task_schedule(self):
-        # print(f"ten seconds passed: {time.strftime('%S:%M:%H', time.localtime())}")
         t_now = time.localtime()
-        t_secs = time.time()
-        for s in self.schedule_guild:
-            should_fire = t_secs - s.fired > 3600
-            if should_fire and t_now.tm_hour == s.hour and t_now.tm_min == s.minute:
-                s.fired = t_secs
-                await s.channel.send("Time to meet, @everyone!")
+        secs_now = time.time()
+        schedule_union = list(self.schedule_guild.values())
+        schedule_union.extend(self.schedule_dm.values())
+        for schedules in schedule_union:
+            for entry in schedules:
+                should_fire = secs_now - entry.fired > 3600
+                if should_fire and t_now.tm_hour == entry.hour and t_now.tm_min == entry.minute:
+                    # Event fired
+                    entry.fired = secs_now
+                    if entry.guild:
+                        await entry.channel.send("Time to meet, @everyone!")
+                    else:
+                        await entry.channel.send(f"Here's your reminder for "
+                                                 f"{_format_time(t_now.tm_hour, t_now.tm_min)} ;).")
 
     @commands.command(description="Randomly chooses an order for users in a voice channel to take turns.")
     async def startmeeting(self, ctx):
@@ -55,18 +78,6 @@ class Meetings(commands.Cog, name=_COG_NAME):
             await ctx.send(f"What's the purpose of calling everyone here, huh, {ctx.author.mention}?")
         else:
             await ctx.send("Hey @everyone, I think a meeting is about to start!")
-
-
-    def insert_schedule_entry(self, schedule, entry):
-
-        if len(schedule) >= Meetings.SCHEDULE_LIMIT:
-            return False
-        elif entry.time in [s.time for s in schedule]:
-            return False
-
-        schedule.append(entry)
-        schedule.sort(key=lambda x: (x.hour, x.minute))
-        return True
 
     def schedule_list_for(self, ctx):
         if ctx.guild:
@@ -90,7 +101,7 @@ class Meetings(commands.Cog, name=_COG_NAME):
             p_channel = ctx.guild.system_channel
         daily = ScheduleEntry(hour, minute, ctx.guild, p_channel, ctx.author)
 
-        entry_added = self.insert_schedule_entry(self.schedule_list_for(ctx), daily)
+        entry_added = _insert_schedule_entry(self.schedule_list_for(ctx), daily)
 
         if entry_added:
             await ctx.send(f"Scheduled a daily meeting at {daily.time}")
