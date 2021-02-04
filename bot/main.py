@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 from hacker_cog import Hacker
 from meetings_cog import Meetings
-import time
 import logging
 import random
 import os
@@ -35,8 +34,10 @@ async def on_message(msg):
 async def on_command_error(ctx, error):
     """"Handles all errors"""
     print(error)
-    await ctx.send("I'm sorry, Fury, I cannot do that")
-
+    line1 = "I'm sorry, Fury. I can't let you do that."
+    line2 = "I'm sorry. I can't..."
+    line3 = "I can't let you do that, Kung Fury."
+    await ctx.send(random.choice([line1, line2, line3]))
 
 @bot.command()
 async def members(ctx):
@@ -51,9 +52,8 @@ async def members_error(ctx, error):
     """Custom command error example"""
     await ctx.send("couldn't process your command " + str(error))
 
-
-#Testing some commands
-@bot.command(description='For when you wanna settle the score some other way')
+# Testing some commands
+@bot.command(description="For when you wanna settle the score some other way")
 async def choose(ctx, *choices: str):
     """Chooses between multiple choices"""
     await ctx.send(random.choice(choices))
