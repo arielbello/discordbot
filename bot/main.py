@@ -15,14 +15,14 @@ intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="!", description=description, intents=intents)
 
-
 @bot.event
 async def on_ready():
     print('Logged in as')
     print(bot.user.name)
     print(bot.user.id)
     print('------')
-
+    # Time to load saved state from disk
+    await bot.cogs["Meetings"].load_schedules()
 
 @bot.event
 async def on_message(msg):
@@ -39,11 +39,11 @@ async def on_command_error(ctx, error):
     line3 = "I can't let you do that, Kung Fury."
     await ctx.send(random.choice([line1, line2, line3]))
 
+
 @bot.command()
 async def members(ctx):
     """Tells the number of members currently in this server"""
     people = ctx.guild.members
-    print(people)
     await ctx.send("there are {} devs here!".format(len(people)))
 
 
@@ -51,6 +51,7 @@ async def members(ctx):
 async def members_error(ctx, error):
     """Custom command error example"""
     await ctx.send("couldn't process your command " + str(error))
+
 
 # Testing some commands
 @bot.command(description="For when you wanna settle the score some other way")

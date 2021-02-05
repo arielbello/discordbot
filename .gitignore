@@ -1,6 +1,8 @@
-#Pycharm IDE
+# Custom
 .idea
 *.env
+data/
+testing_stuff.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
