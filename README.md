@@ -14,10 +14,9 @@ I'm trying to help manage this server, specially with meetings.
 H4CK3R:
   ping     Test my latency
 Meetings:
-  call     Mention people
-  meeting  [start] - manage meetings using subcommands
-  schedule [add, list, del, clear] - manage the schedule using subcommands
-​No Category:
+  meeting  [start] - Manage meetings using subcommands
+  schedule [add, list, del, clear] - Manage schedule using subcommands
+No Category:
   help     Shows this message
 
 Type !help command for more info on a command.

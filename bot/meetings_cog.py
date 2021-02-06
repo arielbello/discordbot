@@ -18,7 +18,7 @@ class Meetings(commands.Cog, name=_COG_NAME):
 
     @commands.group(description="Meetings top level command")
     async def meeting(self, ctx):
-        """[start] - manage meetings using subcommands"""
+        """[start] - Manage meetings using subcommands"""
         if ctx.invoked_subcommand is None:
             await ctx.send("Do you mean _!meeting start_ ?")
 
@@ -40,17 +40,6 @@ class Meetings(commands.Cog, name=_COG_NAME):
         sep_str = " -> "
         await ctx.send(f"_{sep_str.join(meeting_order)}_")
 
-    @commands.command(description="Be annoying by mentioning someone, or everyone")
-    async def call(self, ctx, *args):
-        """Mention people"""
-        if not ctx.guild:
-            await ctx.send(f"What's the purpose of calling someone here, huh, {ctx.author.mention}?")
-        elif not args:
-            await ctx.send("Please provide a name of someone you want to call")
-        else:
-            sep = ", "
-            await ctx.send(f"Hey, {sep.join(args)}!")
-
     def entry_display_string(self, entry, idx=None):
         channel = self.schedule.get_entry_channel(entry)
         entry_str = f"{entry.time} on #{str(channel)}"
@@ -58,7 +47,7 @@ class Meetings(commands.Cog, name=_COG_NAME):
 
     @commands.group(description="Top level command for schedule entries")
     async def schedule(self, ctx):
-        """[add, list, del, clear] - manage schedule using subcommands"""
+        """[add, list, del, clear] - Manage schedule using subcommands"""
         if ctx.invoked_subcommand is None:
             await ctx.send("Tell me what you want: add, del, list or clear?")
 

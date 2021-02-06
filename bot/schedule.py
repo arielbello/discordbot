@@ -73,8 +73,7 @@ class Schedule:
 
                     time_str = utils.format_time(t_now.tm_hour, t_now.tm_min)
                     if entry.guild_id:
-                        await channel.send(f"Someone told me to mention @everyone right now."
-                                           f"It's time - {time_str}!")
+                        await channel.send(f"Hey, @everyone! It's time - {time_str}!")
                     else:
                         await channel.send(f"Here's your reminder for {time_str}.")
 
