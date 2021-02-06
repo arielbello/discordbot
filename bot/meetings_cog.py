@@ -1,170 +1,71 @@
-from discord.ext import tasks, commands
-from collections import defaultdict
+from schedule import Schedule, Entry
+from discord.ext import commands
 import logging
-import os
-import json
-import aiofiles
-import time
 import random
-import utils
 
 _COG_NAME = "Meetings"
 log = logging.getLogger(__name__)
 
-class ScheduleEntry:
-
-    def __init__(self, **kwargs):
-        self.time = _format_time(kwargs["hour"], kwargs["minute"])
-        self.hour = kwargs.get("hour")
-        self.minute = kwargs.get("minute")
-        self.fired = 0
-        self.guild_id = kwargs.get("guild_id")
-        self.channel_id = kwargs.get("channel_id")
-        self.author_id = kwargs.get("author_id")
-
-
-def _format_time(hour: int, minute: int) -> str:
-    """Turns hours and minutes to a string with the format 'HH:MM'. Assumes 24h clock"""
-    return f"{str(hour).rjust(2, '0')}:{str(minute).rjust(2, '0')}"
-
-
-def _insert_schedule_entry(schedule, entry) -> bool:
-    if len(schedule) >= Meetings.SCHEDULE_LIMIT:
-        return False
-    elif entry.time in [s.time for s in schedule]:
-        return False
-
-    schedule.append(entry)
-    schedule.sort(key=lambda x: (x.hour, x.minute))
-    return True
-
 
 class Meetings(commands.Cog, name=_COG_NAME):
-    SCHEDULE_LIMIT = 8
-    DB_DIR = "data/"
-    DB_PATH = DB_DIR + "schedules.json"
 
     def __init__(self, bot):
         self.bot = bot
-        self.schedule_guild = defaultdict(list)
-        self.schedule_dm = defaultdict(list)
+        self.schedule = Schedule(self)
 
-    async def load_schedules(self):
-        def load_list(schedule_group):
-            out = defaultdict(list)
-            for key in schedule_group:
-                for item in schedule_group[key]:
-                    entry = ScheduleEntry(**item)
-                    out[int(key)].append(entry)
-            return out
+    async def load_schedule(self):
+        await self.schedule.setup_schedule()
 
-        if os.path.exists(Meetings.DB_PATH):
-            async with aiofiles.open(Meetings.DB_PATH, mode="r") as file:
-                file_data = await file.read()
-                json_data = json.loads(file_data)
-                self.schedule_guild = load_list(json_data["schedule_guild"])
-                self.schedule_dm = load_list(json_data["schedule_dm"])
+    @commands.group(description="Meetings top level command")
+    async def meeting(self, ctx):
+        """[start] - manage meetings using subcommands"""
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Do you mean _!meeting start_ ?")
 
-        self._scheduler_task.start()
-
-    async def _write_schedules(self):
-        utils.create_folder_if_needed(Meetings.DB_DIR)
-        async with aiofiles.open(Meetings.DB_PATH, mode="w+") as file:
-            out = {
-                "schedule_guild":
-                    {key: [vars(value) for value in self.schedule_guild[key]] for key in self.schedule_guild},
-
-                "schedule_dm":
-                    {key: [vars(value) for value in self.schedule_dm[key]] for key in self.schedule_dm}
-            }
-            await file.write(json.dumps(out))
-
-    def get_schedule_entry_channel(self, entry):
-        if entry.guild_id:
-            channel = self.bot.get_channel(entry.channel_id)
-        else:
-            user = self.bot.get_user(entry.author_id)
-            channel = user.dm_channel if user else None
-        return channel
-
-    @tasks.loop(seconds=10.0)
-    async def _scheduler_task(self):
-        t_now = time.localtime()
-        secs_now = time.time()
-        schedule_union = list(self.schedule_guild.values())
-        schedule_union.extend(self.schedule_dm.values())
-        for schedules in schedule_union:
-            for entry in schedules:
-                should_fire = secs_now - entry.fired > 3600
-                if should_fire and t_now.tm_hour == entry.hour and t_now.tm_min == entry.minute:
-                    # Event fired
-                    entry.fired = secs_now
-                    channel = self.get_schedule_entry_channel(entry)
-                    if not channel:
-                        log.error(f"Channel not found {entry.channel_id}")
-                        return
-                    if entry.guild_id:
-                        await channel.send("Time to meet, @everyone!")
-                    else:
-                        await channel.send(f"Here's your reminder for "
-                                           f"{_format_time(t_now.tm_hour, t_now.tm_min)}.")
-
-    @commands.command(description="Randomly chooses an order for users in a voice channel to take turns.")
-    async def startmeeting(self, ctx):
+    @meeting.command(name="start")
+    async def start_meeting(self, ctx):
         """Chooses an order for people in your voice channel to talk"""
-        if not ctx.author.voice:
+        try:
+            voice = ctx.author.voice
+        except AttributeError:
+            await ctx.send("Trying to start a meeting with yourself?")
+            return
+
+        if not voice:
             await ctx.send("Please join the voice channel where the meeting will take place first.")
             return
+
         participants = ctx.author.voice.channel.members
         meeting_order = [p.name for p in random.sample(participants, len(participants))]
-        await ctx.send(" -> ".join(meeting_order))
+        sep_str = " -> "
+        await ctx.send(f"_{sep_str.join(meeting_order)}_")
 
-    @commands.command(description="It's pretty much self explanatory")
-    async def calleveryone(self, ctx):
-        """Mention @everyone"""
+    @commands.command(description="Be annoying by mentioning someone, or everyone")
+    async def call(self, ctx, *args):
+        """Mention people"""
         if not ctx.guild:
-            await ctx.send(f"What's the purpose of calling everyone here, huh, {ctx.author.mention}?")
+            await ctx.send(f"What's the purpose of calling someone here, huh, {ctx.author.mention}?")
+        elif not args:
+            await ctx.send("Please provide a name of someone you want to call")
         else:
-            await ctx.send("Hey @everyone, I think a meeting is about to start!")
+            sep = ", "
+            await ctx.send(f"Hey, {sep.join(args)}!")
 
-    def schedule_for_ctx(self, ctx):
-        if ctx.guild:
-            return self.schedule_guild[ctx.guild.id]
-        else:
-            return self.schedule_dm[ctx.author.id]
+    def entry_display_string(self, entry, idx=None):
+        channel = self.schedule.get_entry_channel(entry)
+        entry_str = f"{entry.time} on #{str(channel)}"
+        return f"[{idx}] {entry_str}" if idx is not None else entry_str
 
-    @commands.command(description="Sets an alarm that goes off every day at the specified time hh:mm, "
-                                  "ex. !schedulemeeting 9:30")
-    async def scheduledaily(self, ctx, meet_time):
-        """Schedule a daily meeting at time hh:mm"""
-        try:
-            hour, minute = [int(n) for n in meet_time.split(":")]
-        except TypeError:
-            await ctx.send(f"Didn't understand the time \"{meet_time}."
-                           f" Please provide a time like so \"20:30\"")
-            return
+    @commands.group(description="Top level command for schedule entries")
+    async def schedule(self, ctx):
+        """[add, list, del, clear] - manage schedule using subcommands"""
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Tell me what you want: add, del, list or clear?")
 
-        channel = ctx.channel
-        guild_id = ctx.guild.id if ctx.guild else ctx.guild
-        if ctx.guild and ctx.guild.system_channel:
-            channel = ctx.guild.system_channel
-        daily = ScheduleEntry(hour=hour, minute=minute, guild_id=guild_id,
-                              channel_id=channel.id, author_id=ctx.author.id)
-
-        entry_added = _insert_schedule_entry(self.schedule_for_ctx(ctx), daily)
-
-        if entry_added:
-            await ctx.send(f"Scheduled a daily meeting at {daily.time}")
-        else:
-            await ctx.send(f"Couldn't schedule. Check if you reached the {Meetings.SCHEDULE_LIMIT} entries limit "
-                           f"or if there's already an entry at that time using !showschedule")
-
-        await self._write_schedules()
-
-    @commands.command()
-    async def showschedule(self, ctx):
-        """Lists all scheduled daily meetings"""
-        res = self.schedule_for_ctx(ctx)
+    @schedule.command(name="list", aliases=["show"], description="List all schedule entries with respective indexes")
+    async def show_schedule(self, ctx):
+        """Lists all scheduled daily meetings (24-hour clock)"""
+        res = self.schedule.get_entry_list(ctx)
 
         if not res:
             await ctx.send("Our schedule is empty.")
@@ -172,11 +73,73 @@ class Meetings(commands.Cog, name=_COG_NAME):
 
         response_list = []
         for i, entry in enumerate(res):
-            channel = self.get_schedule_entry_channel(entry)
-            response_list.append(f"[{i}] {entry.time} on #{str(channel)}")
+            response_list.append(self.entry_display_string(entry, i))
 
         newline = "\n"
         await ctx.send(f"Here's our schedule:\n{newline.join(response_list)}")
 
-    # TODO: Delete Schedule entry
-    # TODO: Schedule with subcommands
+    @schedule.command(name="add", description="Schedules a message mentioning @everyone. Goes off every day "
+                                              "(except Sunday) at the specified time hh:mm, ex. !schedule add 9:30.")
+    async def schedule_add(self, ctx, meet_time):
+        """Sets a daily alarm to hh:mm (24h clock)"""
+        try:
+            hour, minute = [int(n) for n in meet_time.split(":")]
+        except TypeError:
+            await ctx.send(f"Didn't understand the time \"{meet_time}."
+                           f" Please provide a time like so \"20:30\" (24-hour clock)")
+            return
+
+        channel = ctx.channel
+        guild_id = ctx.guild.id if ctx.guild else ctx.guild
+        if ctx.guild and ctx.guild.system_channel:
+            channel = ctx.guild.system_channel
+        daily = Entry(hour=hour, minute=minute, guild_id=guild_id,
+                      channel_id=channel.id, author_id=ctx.author.id)
+
+        entry_added = self.schedule.insert_schedule_entry(ctx, daily)
+
+        if entry_added:
+            await ctx.send(f"Scheduled a daily meeting at {daily.time}")
+        else:
+            await ctx.send(f"Couldn't schedule. Check if you reached the {Schedule.SCHEDULE_LIMIT} entries limit "
+                           f"or if there's already an entry at that time using !schedule list")
+
+        await self.schedule.write_schedules()
+
+    @schedule.command(name="clear", description="Same as !schedule del all")
+    async def schedule_clear(self, ctx):
+        await self.delete(ctx, index="all")
+
+    @schedule.command(name="del", aliases=["delete"],
+                      description="You can see the entries indexes with !schedule list")
+    async def delete(self, ctx, index=None):
+        """Delete a schedule entry by index"""
+        if not index:
+            await ctx.send("C'mon, tell me the index of the entry to be deleted.")
+            return
+
+        entries_list = self.schedule.get_entry_list(ctx)
+        if not entries_list:
+            await ctx.send("You got nothing scheduled to delete.")
+            return
+
+        if isinstance(index, str) and index.lower() == "all":
+            entries_count = len(entries_list)
+            del entries_list[:]
+            await self.schedule.write_schedules()
+            await ctx.send(f"Deleted {entries_count} stuff from your schedule! Hope you meant to do that!")
+            return
+
+        try:
+            index = int(index)
+        except TypeError:
+            await ctx.send("Give me a number as index.")
+            return
+
+        if index >= len(entries_list) or index < 0:
+            await ctx.send(f"This is not a valid index.")
+        else:
+            entry_str = self.entry_display_string(entries_list[index])
+            del entries_list[index]
+            await self.schedule.write_schedules()
+            await ctx.send(f"Deleted {entry_str}")

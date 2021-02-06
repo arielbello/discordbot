@@ -15,6 +15,7 @@ intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="!", description=description, intents=intents)
 
+
 @bot.event
 async def on_ready():
     print('Logged in as')
@@ -22,7 +23,8 @@ async def on_ready():
     print(bot.user.id)
     print('------')
     # Time to load saved state from disk
-    await bot.cogs["Meetings"].load_schedules()
+    await bot.cogs["Meetings"].load_schedule()
+
 
 @bot.event
 async def on_message(msg):
@@ -38,32 +40,6 @@ async def on_command_error(ctx, error):
     line2 = "I'm sorry. I can't..."
     line3 = "I can't let you do that, Kung Fury."
     await ctx.send(random.choice([line1, line2, line3]))
-
-
-@bot.command()
-async def members(ctx):
-    """Tells the number of members currently in this server"""
-    people = ctx.guild.members
-    await ctx.send("there are {} devs here!".format(len(people)))
-
-
-@members.error
-async def members_error(ctx, error):
-    """Custom command error example"""
-    await ctx.send("couldn't process your command " + str(error))
-
-
-# Testing some commands
-@bot.command(description="For when you wanna settle the score some other way")
-async def choose(ctx, *choices: str):
-    """Chooses between multiple choices"""
-    await ctx.send(random.choice(choices))
-
-
-@bot.command()
-async def joined(ctx, member: discord.Member):
-    """Says when a member joined"""
-    await ctx.send('{0.name} joined in {0.joined_at}'.format(member))
 
 
 token = os.environ["DISCORD_TOKEN"]
