@@ -69,12 +69,12 @@ class Meetings(commands.Cog, name=_COG_NAME):
 
     @schedule.command(name="add", description="Schedules a message mentioning @everyone. Goes off every day "
                                               "(except Sunday) at the specified time hh:mm, ex. !schedule add 9:30.")
-    async def schedule_add(self, ctx, meet_time):
+    async def schedule_add(self, ctx, entry_time):
         """Sets a daily alarm to hh:mm (24h clock)"""
         try:
-            hour, minute = [int(n) for n in meet_time.split(":")]
+            hour, minute = [int(n) for n in entry_time.split(":")]
         except TypeError:
-            await ctx.send(f"Didn't understand the time \"{meet_time}."
+            await ctx.send(f"Didn't understand the time \"{entry_time}."
                            f" Please provide a time like so \"20:30\" (24-hour clock)")
             return
 
@@ -85,7 +85,7 @@ class Meetings(commands.Cog, name=_COG_NAME):
         daily = Entry(hour=hour, minute=minute, guild_id=guild_id,
                       channel_id=channel.id, author_id=ctx.author.id)
 
-        entry_added = self.schedule.insert_schedule_entry(ctx, daily)
+        entry_added = self.schedule.add_schedule_entry(ctx, daily)
 
         if entry_added:
             await ctx.send(f"Scheduled a daily meeting at {daily.time}")
