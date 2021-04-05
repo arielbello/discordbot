@@ -15,6 +15,11 @@ Open a bash in the project root directory then run:
 - export DISCORD_TOKEN="\<your discord bot token here\>"
 - python3 bot/main.py
 
+Obs: In order to get a discord bot token, you must create an
+application on https://discord.com/developers, select the newly created application,
+navigate to _Bot_, then click on _click to reveal token_ (highlighted in the image below).
+
+![bot_token_page](https://user-images.githubusercontent.com/2393869/113619247-239c3080-962f-11eb-9e1c-1c5045ade571.png)
 
 ------------------------------------------------------
 Here's the current bot `!help`
